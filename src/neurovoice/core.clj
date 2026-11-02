@@ -1,6 +1,55 @@
 (ns neurovoice.core
+  (:require [clojure.java.io :as io])
+  (:import [javax.sound.sampled AudioSystem
+                                AudioFormat
+                                AudioFormat$Encoding])
   (:gen-class))
 
+(defn read-sample [data position]
+  (let [low (bit-and 255 (aget data position))
+        high (aget data (inc position))]
+    (/ (+ low (bit-shift-left high 8))
+       32768.0)))
+
+(defn read-audio [file-path]
+  (with-open [input (AudioSystem/getAudioInputStream
+                      (io/file file-path))]
+
+    (let [format (.getFormat input)
+          channels (.getChannels format)
+          sample-rate (.getSampleRate format)
+
+          pcm-format (AudioFormat.
+                       AudioFormat$Encoding/PCM_SIGNED
+                       sample-rate
+                       16
+                       channels
+                       (* 2 channels)
+                       sample-rate
+                       false)]
+
+      (with-open [audio (AudioSystem/getAudioInputStream
+                          pcm-format input)]
+
+        (let [data (.readAllBytes audio)
+
+              samples (mapv
+                        (fn [i]
+                          (/ (reduce +
+                                     (map
+                                       (fn [c]
+                                         (read-sample
+                                           data
+                                           (+ i (* 2 c))))
+                                       (range channels)))
+                             channels))
+
+                        (range 0
+                               (alength data)
+                               (* 2 channels)))]
+
+          {:samples samples
+           :sample-rate sample-rate})))))
 
 ;; Prosecna vrednost signala
 (defn average [signal]
@@ -42,14 +91,21 @@
 ;; Pokretanje programa
 (defn -main [& args]
 
-  (let [signal [0.2 0.5 -0.3 0.7 -0.1]
-        result (analyze-signal signal)]
+  (doseq [path ["resources/audio/healthy.wav"
+                "resources/audio/parkinsons.wav"]]
 
-    (println "NeuroVoice - Analiza audio signala")
-    (println "Signal:" signal)
+    (if (.exists (io/file path))
 
-    (println "Prosecna vrednost:" (:average result))
-    (println "Maksimalna amplituda:" (:amplitude result))
-    (println "RMS:" (:rms result))
-    (println "Energija:" (:energy result))
-    (println "Peak-to-peak:" (:peak-to-peak result))))
+      (let [{:keys [samples sample-rate]} (read-audio path)
+            result (analyze-signal samples)]
+
+        (println "\nFile:" path)
+        (println "Sample rate:" sample-rate "Hz")
+        (println "Duration:" (/ (count samples) sample-rate) "seconds")
+        (println "Average:" (:average result))
+        (println "Amplitude:" (:amplitude result))
+        (println "RMS:" (:rms result))
+        (println "Energy:" (:energy result))
+        (println "Peak-to-peak:" (:peak-to-peak result)))
+
+      (println "File not found:" path))))
