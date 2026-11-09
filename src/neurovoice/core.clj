@@ -78,6 +78,14 @@
   (- (apply max signal)
      (apply min signal)))
 
+(defn normalize-signal [signal]
+  (let [peak (if (seq signal)
+               (amplitude signal)
+               0)]
+    (if (zero? peak)
+      (vec signal)
+      (mapv #(/ % peak) signal))))
+
 
 ;; Analiza svih karakteristika
 (defn analyze-signal [signal]
@@ -86,6 +94,16 @@
    :rms (rms signal)
    :energy (energy signal)
    :peak-to-peak (peak-to-peak signal)})
+
+(defn split-signal [signal segment-size]
+  (when (<= segment-size 0)
+    (throw (IllegalArgumentException.
+             "Segment size must be positive")))
+  (mapv vec (partition-all segment-size signal)))
+
+(defn analyze-segments [signal segment-size]
+  (mapv analyze-signal
+        (split-signal signal segment-size)))
 
 
 ;; Pokretanje programa
@@ -97,7 +115,12 @@
     (if (.exists (io/file path))
 
       (let [{:keys [samples sample-rate]} (read-audio path)
-            result (analyze-signal samples)]
+            result (analyze-signal samples)
+
+            segment-size (max 1 (int (* sample-rate 0.1)))
+            segments (analyze-segments samples segment-size)
+            normalized-samples (normalize-signal samples)]
+
 
         (println "\nFile:" path)
         (println "Sample rate:" sample-rate "Hz")
@@ -106,6 +129,17 @@
         (println "Amplitude:" (:amplitude result))
         (println "RMS:" (:rms result))
         (println "Energy:" (:energy result))
-        (println "Peak-to-peak:" (:peak-to-peak result)))
+        (println "Peak-to-peak:" (:peak-to-peak result))
+
+        (println "Number of segments:" (count segments))
+        (println "First five RMS values:"
+                 (mapv :rms (take 5 segments)))
+
+        (println "Normalized amplitude:"
+               (amplitude normalized-samples))
+
+        (println "Normalized RMS:"
+               (rms normalized-samples)))
+
 
       (println "File not found:" path))))

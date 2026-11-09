@@ -31,6 +31,20 @@
 (fact "Complete signal analysis"
       (:energy (nv/analyze-signal [1 2 3])) => 14)
 
+(fact "Normalizing signal amplitude"
+      (nv/normalize-signal [2.0 -4.0 1.0])
+      => [0.5 -1.0 0.25])
+
+
+(fact "Normalizing a silent signal"
+      (nv/normalize-signal [0.0 0.0 0.0])
+      => [0.0 0.0 0.0])
+
+
+(fact "Normalizing an empty signal"
+      (nv/normalize-signal [])
+      => [])
+
 
 (fact "Reading 16-bit audio samples"
       (nv/read-sample (byte-array [0 64]) 0) => 0.5
@@ -57,3 +71,12 @@
 
           (finally
             (.delete file)))))
+
+(fact "Splitting signal into segments"
+      (nv/split-signal [1 2 3 4 5] 2)
+      => [[1 2] [3 4] [5]])
+
+(fact "Analyzing signal segments"
+      (mapv :average
+            (nv/analyze-segments [2 4 6 8] 2))
+      => [3 7])
