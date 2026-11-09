@@ -80,3 +80,100 @@
       (mapv :average
             (nv/analyze-segments [2 4 6 8] 2))
       => [3 7])
+
+(fact "Autocorrelation with zero lag"
+      (nv/autocorrelation [1 2 3] 0) => 14)
+
+
+(fact "Autocorrelation with one sample lag"
+      (nv/autocorrelation [1 2 3] 1) => 8)
+
+
+(fact "Autocorrelation with two samples lag"
+      (nv/autocorrelation [1 2 3] 2) => 3)
+
+
+(fact "Autocorrelation of a periodic signal"
+      (nv/autocorrelation [1 0 -1 0 1 0 -1 0] 4) => 2)
+
+
+(fact "Autocorrelation of an empty signal"
+      (nv/autocorrelation [] 0) => 0)
+
+
+(fact "Autocorrelation with invalid lag"
+      (nv/autocorrelation [1 2 3] -1)
+      => (throws IllegalArgumentException))
+
+(fact "Fundamental frequency of a periodic signal"
+      (let [sample-rate 8000
+            frequency 200
+            signal (mapv
+                     (fn [i]
+                       (Math/sin
+                         (* 2 Math/PI frequency
+                            (/ i (double sample-rate)))))
+                     (range 800))]
+
+        (nv/fundamental-frequency signal sample-rate)
+        => (roughly 200.0 2.0)))
+
+
+(fact "Fundamental frequency of a silent signal"
+      (nv/fundamental-frequency [0.0 0.0 0.0] 8000)
+      => nil)
+
+
+(fact "Fundamental frequency of an empty signal"
+      (nv/fundamental-frequency [] 8000)
+      => nil)
+
+
+(fact "Fundamental frequency with invalid sample rate"
+      (nv/fundamental-frequency [1 2 3] 0)
+      => (throws IllegalArgumentException))
+
+(fact "Fundamental frequency of different signals"
+      (let [sample-rate 16000
+
+            generate-signal
+            (fn [frequency]
+              (mapv
+                (fn [i]
+                  (Math/sin
+                    (* 2 Math/PI frequency
+                       (/ i (double sample-rate)))))
+                (range 3200)))]
+
+        (nv/fundamental-frequency
+          (generate-signal 120) sample-rate)
+        => (roughly 120.0 3.0)
+
+        (nv/fundamental-frequency
+          (generate-signal 300) sample-rate)
+        => (roughly 300.0 5.0)))
+
+(fact "Normalized autocorrelation of a periodic signal"
+      (nv/normalized-autocorrelation
+        [1 0 -1 0 1 0 -1 0] 4)
+      => (roughly 1.0))
+
+
+(fact "Normalized autocorrelation with zero lag"
+      (nv/normalized-autocorrelation [1 2 3] 0)
+      => (roughly 1.0))
+
+
+(fact "Normalized autocorrelation of a silent signal"
+      (nv/normalized-autocorrelation [0 0 0] 1)
+      => 0.0)
+
+
+(fact "Normalized autocorrelation of an empty signal"
+      (nv/normalized-autocorrelation [] 0)
+      => 0.0)
+
+
+(fact "Normalized autocorrelation with invalid lag"
+      (nv/normalized-autocorrelation [1 2 3] -1)
+      => (throws IllegalArgumentException))

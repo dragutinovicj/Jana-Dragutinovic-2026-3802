@@ -86,6 +86,53 @@
       (vec signal)
       (mapv #(/ % peak) signal))))
 
+(defn autocorrelation [signal lag]
+  (when (or (not (integer? lag)) (neg? lag))
+    (throw (IllegalArgumentException.
+             "Lag must be a non-negative integer")))
+
+  (reduce + 0
+          (map * signal (drop lag signal))))
+
+(defn normalized-autocorrelation [signal lag]
+  (when (or (not (integer? lag)) (neg? lag))
+    (throw (IllegalArgumentException.
+             "Lag must be a non-negative integer")))
+
+  (let [first-part (take (- (count signal) lag) signal)
+        second-part (drop lag signal)
+
+        energy-first (energy first-part)
+        energy-second (energy second-part)
+
+        denominator (Math/sqrt (* energy-first energy-second))]
+
+    (if (zero? denominator)
+      0.0
+      (/ (autocorrelation signal lag) denominator))))
+
+(defn fundamental-frequency [signal sample-rate]
+  (when (not (pos? sample-rate))
+    (throw (IllegalArgumentException.
+             "Sample rate must be positive")))
+
+  (when (seq signal)
+    (let [mean-value (average signal)
+          centered (mapv #(- % mean-value) signal)
+
+          min-lag (max 1 (int (Math/ceil (/ sample-rate 400.0))))
+          max-lag (min (dec (count signal))
+                       (int (Math/floor (/ sample-rate 80.0))))]
+
+      (when (and (<= min-lag max-lag)
+                 (> (rms centered) 0.01))
+
+        (let [lags (range min-lag (inc max-lag))
+              best-lag (apply max-key
+                              #(autocorrelation centered %)
+                              lags)]
+
+          (/ (double sample-rate) best-lag))))))
 
 ;; Analiza svih karakteristika
 (defn analyze-signal [signal]
@@ -105,6 +152,13 @@
   (mapv analyze-signal
         (split-signal signal segment-size)))
 
+(defn f0-estimates [signal sample-rate segment-size]
+  (->> (split-signal signal segment-size)
+       (filter #(> (rms %) 0.01))
+       (map #(fundamental-frequency % sample-rate))
+       (remove nil?)
+       vec))
+
 
 ;; Pokretanje programa
 (defn -main [& args]
@@ -119,7 +173,9 @@
 
             segment-size (max 1 (int (* sample-rate 0.1)))
             segments (analyze-segments samples segment-size)
-            normalized-samples (normalize-signal samples)]
+            normalized-samples (normalize-signal samples)
+
+            f0-values (f0-estimates samples sample-rate segment-size)]
 
 
         (println "\nFile:" path)
@@ -135,11 +191,21 @@
         (println "First five RMS values:"
                  (mapv :rms (take 5 segments)))
 
+        (println "Number of F0 estimates:" (count f0-values))
+
+        (println "First ten F0 estimates (Hz):"
+                 (vec (take 10 f0-values)))
+
+        (when (seq f0-values)
+          (println "Average F0 (Hz):" (average f0-values)))
+
         (println "Normalized amplitude:"
                (amplitude normalized-samples))
 
         (println "Normalized RMS:"
                (rms normalized-samples)))
+
+
 
 
       (println "File not found:" path))))
