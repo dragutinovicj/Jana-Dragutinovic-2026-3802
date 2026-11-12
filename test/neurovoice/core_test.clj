@@ -177,3 +177,120 @@
 (fact "Normalized autocorrelation with invalid lag"
       (nv/normalized-autocorrelation [1 2 3] -1)
       => (throws IllegalArgumentException))
+
+(fact "F0 estimates of a periodic signal"
+      (let [sample-rate 8000
+            frequency 200
+            signal (mapv
+                     (fn [i]
+                       (Math/sin
+                         (* 2 Math/PI frequency
+                            (/ i (double sample-rate)))))
+                     (range 1600))
+
+            estimates (nv/f0-estimates signal sample-rate 800)]
+
+        (count estimates) => 2
+
+        (every? #(<= (Math/abs (- % 200.0)) 2.0)
+                estimates)
+        => true))
+
+
+(fact "F0 estimates of a silent signal"
+      (nv/f0-estimates [0.0 0.0 0.0 0.0] 8000 2)
+      => [])
+
+(fact "Fundamental frequency of a noisy signal"
+      (let [sample-rate 8000
+            frequency 200
+
+            signal (mapv
+                     (fn [i]
+                       (let [time (/ i (double sample-rate))
+                             sine (Math/sin
+                                    (* 2 Math/PI frequency time))
+                             noise (* 0.1
+                                      (Math/sin
+                                        (* 2 Math/PI 137 time)))]
+                         (+ sine noise)))
+                     (range 1600))]
+
+        (nv/fundamental-frequency signal sample-rate)
+        => (roughly 200.0 2.0)))
+
+(fact "F0 analysis of a periodic signal"
+      (let [sample-rate 8000
+            frequency 200
+            signal (mapv
+                     (fn [i]
+                       (Math/sin
+                         (* 2 Math/PI frequency
+                            (/ i (double sample-rate)))))
+                     (range 1600))
+
+            result (nv/analyze-f0 signal sample-rate)]
+
+        (:frequency result) => (roughly 200.0 2.0)
+        (:correlation result) => (roughly 1.0 0.01)))
+
+
+(fact "F0 analysis of a silent signal"
+      (nv/analyze-f0 [0.0 0.0 0.0] 8000)
+      => nil)
+
+
+(fact "F0 analysis of an empty signal"
+      (nv/analyze-f0 [] 8000)
+      => nil)
+
+(fact "F0 analysis of signal segments"
+      (let [sample-rate 8000
+            frequency 200
+            signal (mapv
+                     (fn [i]
+                       (Math/sin
+                         (* 2 Math/PI frequency
+                            (/ i (double sample-rate)))))
+                     (range 1600))
+
+            results (nv/analyze-f0-segments signal sample-rate 800)]
+
+        (count results) => 2
+
+        (every? #(<= (Math/abs (- (:frequency %) 200.0)) 2.0)
+                results)
+        => true
+
+        (every? #(> (:correlation %) 0.9)
+                results)
+        => true))
+
+
+(fact "F0 analysis of silent segments"
+      (nv/analyze-f0-segments [0.0 0.0 0.0 0.0] 8000 2)
+      => [])
+
+(fact "F0 analysis preserves segment positions"
+      (let [sample-rate 8000
+            frequency 200
+
+            tone (mapv
+                   (fn [i]
+                     (Math/sin
+                       (* 2 Math/PI frequency
+                          (/ i (double sample-rate)))))
+                   (range 800))
+
+            silence (vec (repeat 800 0.0))
+
+            signal (vec (concat tone silence tone))
+
+            results (nv/analyze-f0-segments signal sample-rate 800)]
+
+        (count results) => 2
+
+        (mapv :segment-index results) => [0 2]
+
+        (mapv :time-seconds results)
+        => [0.0 0.2]))

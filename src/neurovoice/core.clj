@@ -128,11 +128,29 @@
                  (> (rms centered) 0.01))
 
         (let [lags (range min-lag (inc max-lag))
-              best-lag (apply max-key
-                              #(autocorrelation centered %)
-                              lags)]
+              correlation (fn [lag]
+                              (normalized-autocorrelation centered lag))
 
-          (/ (double sample-rate) best-lag))))))
+              peaks (filter
+                      (fn [lag]
+                              (and (> (correlation lag) 0.9)
+                                   (> (correlation lag) (correlation (dec lag)))
+                                   (>= (correlation lag) (correlation (inc lag)))))
+                              lags)
+              best-lag (first peaks)]
+
+         (when best-lag
+           (/ (double sample-rate) best-lag)))))))
+
+(defn analyze-f0 [signal sample-rate]
+  (let [frequency (fundamental-frequency signal sample-rate)]
+    (when frequency
+      (let [mean-value (average signal)
+            centered (mapv #(- % mean-value) signal)
+            lag (int (Math/round (/ sample-rate frequency)))
+            correlation (normalized-autocorrelation centered lag)]
+        {:frequency frequency
+         :correlation correlation}))))
 
 ;; Analiza svih karakteristika
 (defn analyze-signal [signal]
@@ -159,6 +177,17 @@
        (remove nil?)
        vec))
 
+(defn analyze-f0-segments [signal sample-rate segment-size]
+  (->> (split-signal signal segment-size)
+       (map-indexed
+         (fn [index segment]
+           (when-let [result (analyze-f0 segment sample-rate)]
+             (assoc result
+               :segment-index index
+               :time-seconds (/ (* index segment-size)
+                                (double sample-rate))))))
+       (remove nil?)
+       vec))
 
 ;; Pokretanje programa
 (defn -main [& args]
@@ -175,7 +204,11 @@
             segments (analyze-segments samples segment-size)
             normalized-samples (normalize-signal samples)
 
-            f0-values (f0-estimates samples sample-rate segment-size)]
+            f0-values (f0-estimates samples sample-rate segment-size)
+
+            f0-analysis (analyze-f0-segments samples sample-rate segment-size)]
+
+
 
 
         (println "\nFile:" path)
@@ -198,6 +231,15 @@
 
         (when (seq f0-values)
           (println "Average F0 (Hz):" (average f0-values)))
+
+        (println "Number of F0 analyses:" (count f0-analysis))
+
+        (println "First five F0 analyses:"
+                 (vec (take 5 f0-analysis)))
+
+        (when (seq f0-analysis)
+          (println "Average correlation:"
+                   (average (map :correlation f0-analysis))))
 
         (println "Normalized amplitude:"
                (amplitude normalized-samples))
