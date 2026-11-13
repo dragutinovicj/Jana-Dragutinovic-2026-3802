@@ -55,6 +55,16 @@
 (defn average [signal]
   (/ (reduce + signal) (count signal)))
 
+(defn standard-deviation [values]
+  (when (seq values)
+    (let [mean-value (average values)
+          squared-differences
+          (map (fn [value]
+                 (* (- value mean-value)
+                    (- value mean-value)))
+               values)]
+
+      (Math/sqrt (average squared-differences)))))
 
 ;; Maksimalna amplituda
 (defn amplitude [signal]
@@ -189,6 +199,30 @@
        (remove nil?)
        vec))
 
+(defn f0-variability [f0-analysis]
+  (let [frequencies (map :frequency f0-analysis)]
+    (when (seq frequencies)
+      {:mean-f0 (average frequencies)
+       :std-f0 (standard-deviation frequencies)})))
+
+(defn f0-changes [f0-analysis]
+  (->> (partition 2 1 f0-analysis)
+       (filter (fn [[first-segment second-segment]]
+                 (= (:segment-index second-segment)
+                    (inc (:segment-index first-segment)))))
+       (map (fn [[first-segment second-segment]]
+              (Math/abs
+                 (double
+                   (- (:frequency second-segment)
+                      (:frequency first-segment))))))
+       vec))
+
+(defn f0-coverage [total-segments f0-analysis]
+  (if (pos? total-segments)
+    (* 100.0
+       (/ (count f0-analysis) total-segments))
+    0.0))
+
 ;; Pokretanje programa
 (defn -main [& args]
 
@@ -206,7 +240,11 @@
 
             f0-values (f0-estimates samples sample-rate segment-size)
 
-            f0-analysis (analyze-f0-segments samples sample-rate segment-size)]
+            f0-analysis (analyze-f0-segments samples sample-rate segment-size)
+
+            f0-variation (f0-variability f0-analysis)
+
+            f0-differences (f0-changes f0-analysis)]
 
 
 
@@ -232,7 +270,14 @@
         (when (seq f0-values)
           (println "Average F0 (Hz):" (average f0-values)))
 
+        (when f0-variation
+          (println "F0 standard deviation (Hz):"
+                   (:std-f0 f0-variation)))
+
         (println "Number of F0 analyses:" (count f0-analysis))
+
+        (println "F0 coverage (%):"
+                 (f0-coverage (count segments) f0-analysis))
 
         (println "First five F0 analyses:"
                  (vec (take 5 f0-analysis)))
@@ -240,6 +285,10 @@
         (when (seq f0-analysis)
           (println "Average correlation:"
                    (average (map :correlation f0-analysis))))
+
+        (when (seq f0-differences)
+          (println "Mean absolute F0 chabge (Hz):"
+                   (average f0-differences)))
 
         (println "Normalized amplitude:"
                (amplitude normalized-samples))

@@ -294,3 +294,77 @@
 
         (mapv :time-seconds results)
         => [0.0 0.2]))
+
+(fact "Standard deviation of signal values"
+      (nv/standard-deviation [200 210 190])
+      => (roughly 8.165 0.001))
+
+
+(fact "Standard deviation of constant values"
+      (nv/standard-deviation [200 200 200])
+      => 0.0)
+
+
+(fact "Standard deviation of an empty sequence"
+      (nv/standard-deviation [])
+      => nil)
+
+(fact "F0 variability analysis"
+      (let [analysis [{:frequency 200}
+                      {:frequency 210}
+                      {:frequency 190}]
+
+            result (nv/f0-variability analysis)]
+
+        (:mean-f0 result) => 200
+
+        (:std-f0 result) => (roughly 8.165 0.001)))
+
+
+(fact "F0 variability of an empty analysis"
+      (nv/f0-variability [])
+      => nil)
+
+(fact "F0 changes between consecutive segments"
+      (let [analysis [{:segment-index 0 :frequency 220}
+                      {:segment-index 1 :frequency 225}
+                      {:segment-index 2 :frequency 223}
+                      {:segment-index 3 :frequency 230}]]
+
+        (nv/f0-changes analysis)
+        => [5.0 2.0 7.0]))
+
+
+(fact "F0 changes skip non-consecutive segments"
+      (let [analysis [{:segment-index 0 :frequency 220}
+                      {:segment-index 1 :frequency 225}
+                      {:segment-index 4 :frequency 230}
+                      {:segment-index 5 :frequency 228}]]
+
+        (nv/f0-changes analysis)
+        => [5.0 2.0]))
+
+
+(fact "F0 changes of an empty analysis"
+      (nv/f0-changes [])
+      => [])
+
+(fact "F0 coverage of analyzed segments"
+      (nv/f0-coverage 10
+                      [{:frequency 200}
+                       {:frequency 210}
+                       {:frequency 220}])
+      => (roughly 30.0 0.001))
+
+
+(fact "F0 coverage of an empty signal"
+      (nv/f0-coverage 0 [])
+      => 0.0)
+
+
+(fact "F0 coverage of all segments"
+      (nv/f0-coverage 3
+                      [{:frequency 200}
+                       {:frequency 210}
+                       {:frequency 220}])
+      => (roughly 100.0 0.001))
