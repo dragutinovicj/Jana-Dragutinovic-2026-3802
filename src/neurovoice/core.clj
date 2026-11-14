@@ -223,6 +223,52 @@
        (/ (count f0-analysis) total-segments))
     0.0))
 
+(defn cycle-peaks [signal sample-rate]
+  (let [frequency (fundamental-frequency signal sample-rate)]
+    (if frequency
+      (let [expected-period (/ sample-rate frequency)
+            min-distance (* 0.7 expected-period)
+            threshold (* 0.2 (amplitude signal))
+
+            peaks (->> (range 1 (dec (count signal)))
+                       (filter
+                         (fn [i]
+                           (and (> (nth signal i) threshold)
+                                (> (nth signal i)
+                                   (nth signal (dec i)))
+                                (>= (nth signal i)
+                                    (nth signal (inc i)))))))]
+        (reduce
+          (fn [result peak]
+            (if (or (empty? result)
+                    (>= (- peak (last result)) min-distance))
+              (conj result peak)
+              result))
+          []
+          peaks))
+      [])))
+
+(defn cycle-periods [peaks sample-rate]
+  (when-not (pos? sample-rate)
+    (throw (IllegalArgumentException.
+             "Sample rate must be positive")))
+  (->> (partition 2 1 peaks)
+       (map (fn [[first-peak second-peak]]
+              (/ (- second-peak first-peak)
+                 (double sample-rate))))
+       vec))
+
+(defn valid-cycle-periods [periods frequency]
+  (if (and frequency (pos? frequency))
+    (let [expected-period (/ 1.0 frequency)
+          min-period (* 0.8 expected-period)
+          max-period (* 1.2 expected-period)]
+
+      (->> periods
+           (filter #(<= min-period % max-period))
+           vec))
+    []))
+
 ;; Pokretanje programa
 (defn -main [& args]
 
@@ -294,9 +340,39 @@
                (amplitude normalized-samples))
 
         (println "Normalized RMS:"
-               (rms normalized-samples)))
+               (rms normalized-samples))
 
+        (when (seq f0-analysis)
+          (let [first-result (first f0-analysis)
+                first-index (:segment-index first-result)
 
+                segment (nth (split-signal samples segment-size)
+                             first-index)
+
+                frequency (:frequency first-result)
+
+                peaks (cycle-peaks segment sample-rate)
+                periods (cycle-periods peaks sample-rate)
+
+                valid-periods (valid-cycle-periods periods frequency)]
+
+            (println "Number of detected cycle peaks:"
+                     (count peaks))
+
+            (println "First five cycle peaks:"
+                     (vec (take 5 peaks)))
+
+            (println "First five cycle periods (seconds):"
+                     (vec (take 5 periods)))
+
+            (println "Expected cycle period (seconds):"
+                     (/ 1.0 frequency))
+
+            (println "Number of cycle intervals:"
+                     (count periods))
+
+            (println "Number of valid cycle intervals:"
+                     (count valid-periods)))))
 
 
       (println "File not found:" path))))

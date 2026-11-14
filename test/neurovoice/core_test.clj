@@ -368,3 +368,56 @@
                        {:frequency 210}
                        {:frequency 220}])
       => (roughly 100.0 0.001))
+
+(fact "Detecting peaks of a periodic signal"
+      (let [sample-rate 8000
+            frequency 200
+
+            signal (mapv
+                     (fn [i]
+                       (Math/sin
+                         (* 2 Math/PI frequency
+                            (/ i (double sample-rate)))))
+                     (range 800))
+
+            peaks (nv/cycle-peaks signal sample-rate)]
+
+        (count peaks) => 20
+
+        (take 5 peaks) => [10 50 90 130 170]))
+
+(fact "Calculating cycle periods"
+      (nv/cycle-periods [10 50 90 130] 8000)
+      => [0.005 0.005 0.005])
+
+(fact "Detecting peaks in a silent signal"
+      (nv/cycle-peaks [0.0 0.0 0.0 0.0] 8000)
+      => [])
+
+(fact "Cycle periods with insufficient peaks"
+      (nv/cycle-periods [10] 8000)
+      => [])
+
+(fact "Cycle periods with invalid sample rate"
+      (nv/cycle-periods [10 50] 0)
+      => (throws IllegalArgumentException))
+
+(fact "Filtering cycle periods by expected frequency"
+      (nv/valid-cycle-periods
+        [0.005 0.0045 0.003 0.0052] 200)
+      => [0.005 0.0045 0.0052])
+
+
+(fact "Filtering periods of a stable signal"
+      (nv/valid-cycle-periods
+        [0.005 0.005 0.005] 200)
+      => [0.005 0.005 0.005])
+
+
+(fact "Filtering periods with invalid frequency"
+      (nv/valid-cycle-periods [0.005 0.006] 0)
+      => [])
+
+(fact "Cycle periods with small variations"
+      (nv/cycle-periods [10 50 91 130 171] 8000)
+      => [0.005 0.005125 0.004875 0.005125])
