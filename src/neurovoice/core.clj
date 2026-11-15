@@ -269,6 +269,31 @@
            vec))
     []))
 
+(defn jitter-local [periods]
+  (when (and (>= (count periods) 3)
+             (every? pos? periods))
+    (let [differences
+          (map (fn [[first-period second-period]]
+                 (Math/abs
+                   (- second-period first-period)))
+               (partition 2 1 periods))
+
+          mean-difference (average differences)
+          mean-period (average periods)]
+
+      (* 100.0 (/ mean-difference mean-period)))))
+
+(defn cycle-jitter [peaks sample-rate frequency]
+  (when (and frequency (pos? frequency))
+    (let [periods (cycle-periods peaks sample-rate)
+          valid-periods (valid-cycle-periods periods frequency)]
+
+      (when (and (>= (count periods) 3)
+                 (= (count periods) (count valid-periods)))
+
+        (jitter-local periods)))))
+
+
 ;; Pokretanje programa
 (defn -main [& args]
 
@@ -354,7 +379,9 @@
                 peaks (cycle-peaks segment sample-rate)
                 periods (cycle-periods peaks sample-rate)
 
-                valid-periods (valid-cycle-periods periods frequency)]
+                valid-periods (valid-cycle-periods periods frequency)
+
+                jitter (cycle-jitter peaks sample-rate frequency)]
 
             (println "Number of detected cycle peaks:"
                      (count peaks))
@@ -372,7 +399,12 @@
                      (count periods))
 
             (println "Number of valid cycle intervals:"
-                     (count valid-periods)))))
+                     (count valid-periods))
+
+            (println "Jitter local (%):"
+                     (if (some? jitter)
+                       jitter
+                       "Not available")))))
 
 
       (println "File not found:" path))))

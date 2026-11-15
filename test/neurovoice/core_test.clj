@@ -421,3 +421,36 @@
 (fact "Cycle periods with small variations"
       (nv/cycle-periods [10 50 91 130 171] 8000)
       => [0.005 0.005125 0.004875 0.005125])
+
+(fact "Jitter of varying cycle periods"
+      (nv/jitter-local [0.0050 0.0051 0.0049])
+      => (roughly 3.0 0.001))
+
+
+(fact "Jitter of constant cycle periods"
+      (nv/jitter-local [0.005 0.005 0.005])
+      => (roughly 0.0 0.001))
+
+
+(fact "Jitter with insufficient periods"
+      (nv/jitter-local [0.005])
+      => nil)
+
+
+(fact "Jitter of an empty sequence"
+      (nv/jitter-local [])
+      => nil)
+
+
+(fact "Jitter with invalid periods"
+      (nv/jitter-local [0.005 0.0 0.005])
+      => nil)
+
+(fact "Jitter from detected cycle peaks"
+      (nv/cycle-jitter [10 50 91 130 171] 8000 200)
+      => (roughly 4.1408 0.001))
+
+
+(fact "Jitter rejects inconsistent cycle periods"
+      (nv/cycle-jitter [10 50 90 110 150] 8000 200)
+      => nil)
